@@ -1,0 +1,11 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./front/Cargo.toml",
+        "./back/Cargo.toml",
+        "./front/Cargo.toml"
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer"
+      }
+}
