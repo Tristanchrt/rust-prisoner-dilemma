@@ -22,7 +22,8 @@ pub struct Party {
     pub round: u32,
     pub status: Status,
     pub bet: u32,
-    pub players: (Player, Player),
+    pub player1: Player,
+    pub player2: Player,
     pub winner: Option<Player>,
     pub looser: Option<Player>,
 }
@@ -62,9 +63,10 @@ impl Default for Party {
             round: 0,
             status: Status::default(),
             bet: 0,
-            players: (Player::default(), Player::default()),
             winner: None,
             looser: None,
+            player1: Player::default(),
+            player2: Player::default(),
         }
     }
 }
