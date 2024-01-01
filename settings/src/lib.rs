@@ -6,7 +6,7 @@ pub struct Player {
     pub id: u32,
     pub money: f64,
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Status {
     Init,
     Created,
@@ -15,7 +15,7 @@ pub enum Status {
     Started,
     Finished,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Party {
     pub id: u32,
     pub total_round: u32,
@@ -33,7 +33,7 @@ pub struct Game {
     pub players: Vec<Player>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Protocol {
     pub player: Player,
     pub party_status: Status,

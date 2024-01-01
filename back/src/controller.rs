@@ -29,8 +29,8 @@ impl Controller {
     }
 
     pub fn run(&mut self) {
-        let tcp_listener_c = self.listener.try_clone();
-        for stream in tcp_listener_c.unwrap().incoming() {
+        let tcp_listener_c = self.listener.try_clone().unwrap();
+        for stream in tcp_listener_c.incoming() {
             match stream {
                 Ok(result) => self.process_message(&result),
                 Err(_) => Log::show(
@@ -43,15 +43,26 @@ impl Controller {
 
     pub fn process_message(&mut self, mut tcp_stream: &TcpStream) {
         let mut buffer: BufferSize = [0; 1024];
-        let _size = tcp_stream.read(&mut buffer).unwrap();
+        loop {
+            match tcp_stream.read(&mut buffer) {
+                Ok(bytes_read) => {
+                    if bytes_read == 0 {
+                        println!("Client disconnected");
+                        break;
+                    }
 
-        if _size == 0 {
-            panic!("Error reading message");
+                    let protocol: Protocol = Protocol::from_bytes(&buffer[..bytes_read]);
+
+                    println!("Get new message");
+
+                    self.handle_party(&protocol, &tcp_stream);
+                }
+                Err(e) => {
+                    println!("Error reading from socket: {:?}", e);
+                    break;
+                }
+            }
         }
-
-        let protocol: Protocol = Protocol::from_bytes(&buffer[.._size]);
-
-        self.handle_party(&protocol, &tcp_stream);
     }
 
     pub fn handle_party(&mut self, protocol: &Protocol, tcp_stream: &TcpStream) {
@@ -79,6 +90,11 @@ impl Controller {
         }
     }
 
+    pub fn send_message(&self, bytes: &Vec<u8>, mut tcp_steam: &TcpStream) {
+        tcp_steam.write_all(&bytes).expect("error write");
+        tcp_steam.flush().expect("error flush");
+    }
+
     pub fn create_game(&mut self, protocol: &Protocol) {
         let mut party = Party::default();
         let mut rng = rand::thread_rng();
@@ -91,13 +107,20 @@ impl Controller {
 
         party.player1 = default_player;
         party.player2 = player_from_protocol;
-        self.game.add_party(party);
 
         let player_id: u32 = protocol.player.id;
+
+        let mut protocol_send = protocol.clone();
+        protocol_send.party_id = party.id;
+        protocol_send.party_status = Status::Created;
+        self.game.add_party(party);
+
         let tcp: Option<MutexGuard<'_, TcpStream>> = self.get_stream(player_id);
+
+        let bytes = protocol.to_bytes();
         match tcp {
             Some(stream) => {
-                println!("stream, {:?}", stream)
+                self.send_message(&bytes, &stream);
             }
             None => Log::show("ERROR", format!("Error getting stream")),
         }
@@ -115,7 +138,7 @@ impl Controller {
         }
     }
 
-    pub fn init_player(&mut self, mut tcp_stream: &TcpStream) {
+    pub fn init_player(&mut self, tcp_stream: &TcpStream) {
         let mut protocol: Protocol = Protocol::default();
         let mut rng = rand::thread_rng();
         protocol.player.id = rng.gen::<u32>();
@@ -124,10 +147,9 @@ impl Controller {
 
         let bytes = protocol.to_bytes();
 
-        tcp_stream.write_all(&bytes).unwrap();
-        tcp_stream.flush().unwrap();
-
         let cloned_stream = tcp_stream.try_clone().expect("Failed to clone TcpStream");
+
+        self.send_message(&bytes, &cloned_stream);
 
         self.players_stream
             .insert(protocol.player.id, Arc::new(Mutex::new(cloned_stream)));
