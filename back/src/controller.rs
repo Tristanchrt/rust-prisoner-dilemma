@@ -87,24 +87,41 @@ impl Controller {
             Status::Init => Controller::init_player(&tcp_stream, players),
             Status::Created => Controller::create_game(&protocol, players, game),
             Status::WaitingPlayer => println!("3"),
-            Status::JoinParty => println!("7"),
+            Status::JoinParty => Controller::join_game(protocol, players, game),
             Status::Started => println!("2"),
             Status::Finished => println!("4"),
             _ => println!("Something went wrong with the Party status"),
         }
     }
 
-    pub fn join_game(&mut self, protocol: &Protocol) {
-        // if let Some(found_element) = self
-        // .game
-        // .parties
-        // .iter()
-        // .find(|&element| element.status == Status::WaitingPlayer)
-        // {
-        // println!("Element found: {:?}", found_element);
-        // } else {
-        // println!("Element not found");
-        // }
+    pub fn join_game(
+        protocol: &Protocol,
+        players: &Arc<Mutex<HashMap<u32, TcpStream>>>,
+        game: &Arc<Mutex<Game>>,
+    ) {
+        let mut game_arc = game.lock().unwrap();
+        if let Some(element) = game_arc
+            .parties
+            .iter_mut()
+            .find(|element| element.status == Status::WaitingPlayer)
+        {
+            println!("Find game {:?}", element.id);
+            element.player1 = protocol.player.clone();
+            element.status = Status::Started;
+
+            let mut protocol_send = protocol.clone();
+            protocol_send.party_status = Status::Started;
+
+            let players_to_send = [element.player1.clone(), element.player2.clone()];
+            for player in players_to_send.iter() {
+                let tcp: TcpStream = Controller::get_stream(&players, player.id);
+                protocol_send.player = player.clone();
+                let bytes = protocol_send.to_bytes();
+                Controller::send_message(&bytes, &tcp);
+            }
+        } else {
+            println!("Not party found");
+        }
     }
 
     pub fn send_message(bytes: &Vec<u8>, mut tcp_steam: &TcpStream) {

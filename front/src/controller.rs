@@ -76,6 +76,10 @@ impl Interface {
         ui.set_create_visible(true);
     }
 
+    fn go_in_game(ui: &AppWindow) {
+        Interface::reset_interface(&ui);
+        ui.set_game_visible(true);
+    }
     fn go_waiting_player(ui: &AppWindow) {
         Interface::reset_interface(&ui);
         ui.set_wait_visible(true);
@@ -106,21 +110,39 @@ impl Controller {
 
     fn choice_interface(&self) {}
 
+    fn starting_game(ui: &AppWindow, mut tcp_stream: &TcpStream) {
+        let mut buffer: BufferSize = [0; 1024];
+        let bytes_read: usize = tcp_stream.read(&mut buffer).expect("Read error");
+
+        let protocol = Protocol::from_bytes(&buffer[..bytes_read]);
+        if protocol.party_status == Status::Started {
+            Log::show("INFO", format!("GAME STARTED {:?}", protocol));
+            Interface::go_in_game(&ui);
+        }
+    }
+
     fn attach_event_handlers(&mut self) {
         let ui_cloned = self.interface.clone_strong();
+        let mut protocol = self.client.protocol.clone();
+        let mut tcp_stream: TcpStream = self.client.tcp.try_clone().expect("Clone failed...");
 
         self.interface.on_event_game(move |data| {
             Log::show("INFO", data.to_string());
             if data.trim() == "CREATE" {
                 Interface::go_create_game_ui(&ui_cloned);
             } else {
+                Interface::go_waiting_player(&ui_cloned);
+                protocol.party_status = Status::JoinParty;
+                let bytes = protocol.to_bytes();
+                tcp_stream.write_all(&bytes).unwrap();
+                tcp_stream.flush().unwrap();
+                Controller::starting_game(&ui_cloned, &tcp_stream)
             }
         });
 
-        let mut protocol = self.client.protocol.clone();
         let mut tcp_stream: TcpStream = self.client.tcp.try_clone().expect("Clone failed...");
-
         let ui_cloned = self.interface.clone_strong();
+        let mut protocol = self.client.protocol.clone();
 
         self.interface.on_create_game(move || {
             let total_round = ui_cloned.get_number_round();
@@ -138,10 +160,13 @@ impl Controller {
             let mut buffer: BufferSize = [0; 1024];
             let bytes_read: usize = tcp_stream.read(&mut buffer).expect("Read error");
 
-            let protcol = Protocol::from_bytes(&buffer[..bytes_read]);
-            Log::show("INFO", format!("From server {:?}", protcol));
+            let protocol = Protocol::from_bytes(&buffer[..bytes_read]);
+            Log::show("INFO", format!("From server {:?}", protocol));
 
             Interface::go_waiting_player(&ui_cloned);
+            sleep(Duration::from_secs(1));
+
+            Controller::starting_game(&ui_cloned, &tcp_stream);
         });
     }
 }
