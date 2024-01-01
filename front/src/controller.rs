@@ -2,7 +2,7 @@ slint::include_modules!();
 use settings::{Log, Protocol, Settings, Status};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
-use std::thread::sleep;
+use std::thread;
 use std::time::Duration;
 
 pub struct Client {
@@ -30,16 +30,24 @@ impl Client {
         self.send_message(&bytes);
 
         let mut buffer: BufferSize = [0; 1024];
-        let bytes_read: usize = self.tcp.read(&mut buffer).expect("Read error");
-
-        self.protocol = Protocol::from_bytes(&buffer[..bytes_read]);
-        Log::show(
-            "INFO",
-            format!(
-                "Hello user #{} status {:?}",
-                self.protocol.player.id, self.protocol.party_status
-            ),
-        );
+        match self.tcp.read(&mut buffer) {
+            Ok(bytes_read) => {
+                if bytes_read == 0 {
+                    Log::show("ERROR", "Connection closed by remote endpoint".to_string());
+                }
+                self.protocol = Protocol::from_bytes(&buffer[..bytes_read]);
+                Log::show(
+                    "INFO",
+                    format!(
+                        "Hello user #{} status {:?}",
+                        self.protocol.player.id, self.protocol.party_status
+                    ),
+                );
+            }
+            Err(e) => {
+                eprintln!("Read error: {}", e);
+            }
+        }
     }
 
     fn send_message(&mut self, bytes: &Vec<u8>) {
@@ -106,10 +114,6 @@ impl Controller {
         self.interface.set_menu_visible(true);
     }
 
-    fn set_protocol_data(&self, protocol: Protocol) {}
-
-    fn choice_interface(&self) {}
-
     fn starting_game(ui: &AppWindow, mut tcp_stream: &TcpStream) {
         let mut buffer: BufferSize = [0; 1024];
         let bytes_read: usize = tcp_stream.read(&mut buffer).expect("Read error");
@@ -163,9 +167,7 @@ impl Controller {
             let protocol = Protocol::from_bytes(&buffer[..bytes_read]);
             Log::show("INFO", format!("From server {:?}", protocol));
 
-            Interface::go_waiting_player(&ui_cloned);
-            sleep(Duration::from_secs(1));
-
+            Interface::go_create_game_ui(&ui_cloned);
             Controller::starting_game(&ui_cloned, &tcp_stream);
         });
     }
