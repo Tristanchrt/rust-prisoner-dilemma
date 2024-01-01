@@ -1,15 +1,15 @@
 use rand::Rng;
 use settings::{Game, Log, Party, Player, Protocol, Settings, Status};
 use std::collections::HashMap;
-use std::io::{Bytes, Read, Write};
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::result;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread;
 
 pub struct Controller {
     pub listener: TcpListener,
-    pub game: Game,
-    pub players_stream: HashMap<u32, Arc<Mutex<TcpStream>>>,
+    pub game: Arc<Mutex<Game>>,
+    pub players_stream: Arc<Mutex<HashMap<u32, TcpStream>>>,
 }
 
 type BufferSize = [u8; 1024];
@@ -19,8 +19,8 @@ impl Controller {
         let listener =
             TcpListener::bind(String::from(format!("{}:{}", settings.host, settings.port)))
                 .unwrap();
-        let game = Game::default();
-        let players_stream = HashMap::new();
+        let game = Arc::new(Mutex::new(Game::default()));
+        let players_stream = Arc::new(Mutex::new(HashMap::new()));
         Self {
             listener,
             game,
@@ -28,11 +28,19 @@ impl Controller {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&self) {
         let tcp_listener_c = self.listener.try_clone().unwrap();
         for stream in tcp_listener_c.incoming() {
             match stream {
-                Ok(result) => self.process_message(&result),
+                Ok(tcp) => {
+                    let shared_game = Arc::clone(&self.game);
+                    let shared_players_stream = Arc::clone(&self.players_stream);
+
+                    thread::spawn(move || {
+                        Controller::process_message(&tcp, shared_game, shared_players_stream);
+                    });
+                }
+
                 Err(_) => Log::show(
                     "ERROR",
                     format!("Someting went wrong for reading the stream"),
@@ -41,7 +49,11 @@ impl Controller {
         }
     }
 
-    pub fn process_message(&mut self, mut tcp_stream: &TcpStream) {
+    pub fn process_message(
+        mut tcp_stream: &TcpStream,
+        game: Arc<Mutex<Game>>,
+        players: Arc<Mutex<HashMap<u32, TcpStream>>>,
+    ) {
         let mut buffer: BufferSize = [0; 1024];
         loop {
             match tcp_stream.read(&mut buffer) {
@@ -53,9 +65,9 @@ impl Controller {
 
                     let protocol: Protocol = Protocol::from_bytes(&buffer[..bytes_read]);
 
-                    println!("Get new message");
+                    println!("Get new message {:?}", protocol);
 
-                    self.handle_party(&protocol, &tcp_stream);
+                    Controller::handle_party(&protocol, &tcp_stream, &game, &players);
                 }
                 Err(e) => {
                     println!("Error reading from socket: {:?}", e);
@@ -65,12 +77,17 @@ impl Controller {
         }
     }
 
-    pub fn handle_party(&mut self, protocol: &Protocol, tcp_stream: &TcpStream) {
+    pub fn handle_party(
+        protocol: &Protocol,
+        tcp_stream: &TcpStream,
+        game: &Arc<Mutex<Game>>,
+        players: &Arc<Mutex<HashMap<u32, TcpStream>>>,
+    ) {
         match protocol.party_status {
-            Status::Init => self.init_player(&tcp_stream),
-            Status::Created => self.create_game(&protocol),
+            Status::Init => Controller::init_player(&tcp_stream, players),
+            Status::Created => Controller::create_game(&protocol, players, game),
             Status::WaitingPlayer => println!("3"),
-            Status::JoinParty => self.join_game(&protocol),
+            Status::JoinParty => println!("7"),
             Status::Started => println!("2"),
             Status::Finished => println!("4"),
             _ => println!("Something went wrong with the Party status"),
@@ -78,24 +95,28 @@ impl Controller {
     }
 
     pub fn join_game(&mut self, protocol: &Protocol) {
-        if let Some(found_element) = self
-            .game
-            .parties
-            .iter()
-            .find(|&element| element.status == Status::WaitingPlayer)
-        {
-            println!("Element found: {:?}", found_element);
-        } else {
-            println!("Element not found");
-        }
+        // if let Some(found_element) = self
+        // .game
+        // .parties
+        // .iter()
+        // .find(|&element| element.status == Status::WaitingPlayer)
+        // {
+        // println!("Element found: {:?}", found_element);
+        // } else {
+        // println!("Element not found");
+        // }
     }
 
-    pub fn send_message(&self, bytes: &Vec<u8>, mut tcp_steam: &TcpStream) {
+    pub fn send_message(bytes: &Vec<u8>, mut tcp_steam: &TcpStream) {
         tcp_steam.write_all(&bytes).expect("error write");
         tcp_steam.flush().expect("error flush");
     }
 
-    pub fn create_game(&mut self, protocol: &Protocol) {
+    pub fn create_game(
+        protocol: &Protocol,
+        players: &Arc<Mutex<HashMap<u32, TcpStream>>>,
+        game: &Arc<Mutex<Game>>,
+    ) {
         let mut party = Party::default();
         let mut rng = rand::thread_rng();
 
@@ -113,32 +134,27 @@ impl Controller {
         let mut protocol_send = protocol.clone();
         protocol_send.party_id = party.id;
         protocol_send.party_status = Status::Created;
-        self.game.add_party(party);
 
-        let tcp: Option<MutexGuard<'_, TcpStream>> = self.get_stream(player_id);
+        let mut game_mutux = game.lock().unwrap();
 
-        let bytes = protocol.to_bytes();
-        match tcp {
-            Some(stream) => {
-                self.send_message(&bytes, &stream);
-            }
-            None => Log::show("ERROR", format!("Error getting stream")),
-        }
+        game_mutux.add_party(party);
+
+        let tcp: TcpStream = Controller::get_stream(&players, player_id);
+
+        let bytes = protocol_send.to_bytes();
+        Controller::send_message(&bytes, &tcp);
     }
 
-    pub fn get_stream(&self, player_id: u32) -> Option<MutexGuard<'_, TcpStream>> {
-        if let Some(stream_arc_mutex) = self.players_stream.get(&player_id) {
-            if let Ok(locked_stream) = stream_arc_mutex.lock() {
-                Some(locked_stream)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+    pub fn get_stream(players: &Arc<Mutex<HashMap<u32, TcpStream>>>, player_id: u32) -> TcpStream {
+        let players_stream_arc = players.lock().unwrap();
+        return players_stream_arc
+            .get(&player_id)
+            .unwrap()
+            .try_clone()
+            .unwrap();
     }
 
-    pub fn init_player(&mut self, tcp_stream: &TcpStream) {
+    pub fn init_player(tcp_stream: &TcpStream, players: &Arc<Mutex<HashMap<u32, TcpStream>>>) {
         let mut protocol: Protocol = Protocol::default();
         let mut rng = rand::thread_rng();
         protocol.player.id = rng.gen::<u32>();
@@ -149,9 +165,9 @@ impl Controller {
 
         let cloned_stream = tcp_stream.try_clone().expect("Failed to clone TcpStream");
 
-        self.send_message(&bytes, &cloned_stream);
+        Controller::send_message(&bytes, &cloned_stream);
 
-        self.players_stream
-            .insert(protocol.player.id, Arc::new(Mutex::new(cloned_stream)));
+        let mut players_stream_arc = players.lock().unwrap();
+        players_stream_arc.insert(protocol.player.id, cloned_stream);
     }
 }
