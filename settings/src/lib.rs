@@ -15,6 +15,13 @@ pub enum Status {
     Started,
     Finished,
 }
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum PlayStatus {
+    Betrail,
+    Cooperate,
+    Stanby,
+}
 #[derive(Debug, Clone)]
 pub struct Party {
     pub id: u32,
@@ -41,6 +48,7 @@ pub struct Protocol {
     pub round: u32,
     pub bet: u32,
     pub party_id: u32,
+    pub play: PlayStatus,
 }
 
 impl Default for Player {
@@ -52,6 +60,12 @@ impl Default for Player {
 impl Default for Status {
     fn default() -> Self {
         Status::Init
+    }
+}
+
+impl Default for PlayStatus {
+    fn default() -> Self {
+        PlayStatus::Stanby
     }
 }
 
@@ -95,6 +109,7 @@ impl Default for Protocol {
             round: 0,
             bet: 0,
             party_id: 0,
+            play: PlayStatus::default(),
         }
     }
 }
@@ -131,6 +146,11 @@ impl Protocol {
             Status::Finished => 4,
             Status::JoinParty => 5,
         });
+        bytes.push(match self.play {
+            PlayStatus::Betrail => 0,
+            PlayStatus::Cooperate => 1,
+            PlayStatus::Stanby => 2,
+        });
         bytes.extend(&self.total_round.to_be_bytes());
         bytes.extend(&self.round.to_be_bytes());
         bytes.extend(&self.bet.to_be_bytes());
@@ -155,6 +175,12 @@ impl Protocol {
         let round: u32 = u32::from_be_bytes([bytes[17], bytes[18], bytes[19], bytes[20]]);
         let bet: u32 = u32::from_be_bytes([bytes[21], bytes[22], bytes[23], bytes[24]]);
         let party_id: u32 = u32::from_be_bytes([bytes[25], bytes[26], bytes[27], bytes[28]]);
+        let play = match bytes[29] {
+            0 => PlayStatus::Betrail,
+            1 => PlayStatus::Cooperate,
+            2 => PlayStatus::Stanby,
+            _ => PlayStatus::Stanby,
+        };
 
         Protocol {
             player,
@@ -163,6 +189,7 @@ impl Protocol {
             round,
             bet,
             party_id,
+            play,
         }
     }
 }

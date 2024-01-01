@@ -97,12 +97,21 @@ impl Controller {
         players: &Arc<Mutex<HashMap<u32, TcpStream>>>,
         game: &Arc<Mutex<Game>>,
     ) {
-        let party = game
-            .lock()
-            .unwrap()
+        let mut game_arc = game.lock().unwrap();
+        if let Some(game_) = game_arc
             .parties
             .iter_mut()
-            .find(|element| element.id == protocol.party_id);
+            .find(|element| element.id == protocol.party_id)
+        {
+            println!("Find game {:?}", game_.id);
+            if game_.round < game_.total_round {
+                game_.round += 1;
+                
+            } else {
+            }
+        } else {
+            println!("Not party found");
+        }
     }
 
     pub fn join_game(
