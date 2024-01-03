@@ -22,6 +22,11 @@ pub enum PlayStatus {
     Cooperate,
     Stanby,
 }
+
+#[derive(Debug, Clone)]
+pub struct PartyRound {
+    pub round_played: Vec<((Player, PlayStatus, u32), (Player, PlayStatus, u32))>,
+}
 #[derive(Debug, Clone)]
 pub struct Party {
     pub id: u32,
@@ -33,6 +38,7 @@ pub struct Party {
     pub player2: Player,
     pub winner: Option<Player>,
     pub looser: Option<Player>,
+    pub party_round: PartyRound,
 }
 #[derive(Debug)]
 pub struct Game {
@@ -69,6 +75,17 @@ impl Default for PlayStatus {
     }
 }
 
+impl Default for PartyRound {
+    fn default() -> Self {
+        Self {
+            round_played: vec![(
+                (Player::default(), PlayStatus::default(), 0),
+                (Player::default(), PlayStatus::default(), 0),
+            )],
+        }
+    }
+}
+
 impl Default for Party {
     fn default() -> Self {
         Self {
@@ -81,6 +98,7 @@ impl Default for Party {
             looser: None,
             player1: Player::default(),
             player2: Player::default(),
+            party_round: PartyRound::default(),
         }
     }
 }
