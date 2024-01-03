@@ -27,4 +27,7 @@ The project demonstrates the classic game theory scenario of the Prisoner's Dile
 3. **Using the Application**
 4. **Run Test**
 
-## Code Structure
+## Code Structure
+
+- back : Logic of the game works with mutlithreading for handle multiple tcp connection at the same time
+- settings: Game logic, communication protocol, 

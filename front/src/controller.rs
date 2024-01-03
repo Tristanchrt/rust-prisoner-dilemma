@@ -2,65 +2,54 @@ slint::include_modules!();
 use settings::{Log, Protocol, Settings, Status};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
+use std::sync::RwLock;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
-pub struct Client {
-    pub tcp: TcpStream,
-    pub protocol: Protocol,
-}
-
 pub struct Controller {
     pub settings: Settings,
-    pub interface: AppWindow,
-    pub client: Client,
+    pub interface: Arc<Mutex<AppWindow>>,
+    pub tcp: TcpStream,
+    pub protocol: Arc<Mutex<Protocol>>,
 }
 
 type BufferSize = [u8; 1024];
 
-impl Client {
-    pub fn new(host: &str, port: &str) -> Self {
-        let tcp = TcpStream::connect(format!("{}:{}", host, port)).expect("Connection failed.");
-        let protocol = Protocol::default();
-        Self { tcp, protocol }
-    }
+// impl Client {
+//     fn init(&mut self) {
+//         let bytes = self.protocol.to_bytes();
+//         self.send_message(&bytes);
 
-    fn init(&mut self) {
-        let bytes = self.protocol.to_bytes();
-        self.send_message(&bytes);
+//         let mut buffer: BufferSize = [0; 1024];
+//         loop {
+//             match self.tcp.read(&mut buffer) {
+//                 Ok(bytes_read) => {
+//                     if bytes_read == 0 {
+//                         Log::show("ERROR", "Connection closed by remote endpoint".to_string());
+//                     }
+//                     self.protocol = Protocol::from_bytes(&buffer[..bytes_read]);
+//                     Log::show(
+//                         "INFO",
+//                         format!(
+//                             "Hello user #{} status {:?}",
+//                             self.protocol.player.id, self.protocol.party_status
+//                         ),
+//                     );
+//                 }
+//                 Err(e) => {
+//                     eprintln!("Read error: {}", e);
+//                     break;
+//                 }
+//             }
+//         }
+//     }
 
-        let mut buffer: BufferSize = [0; 1024];
-        match self.tcp.read(&mut buffer) {
-            Ok(bytes_read) => {
-                if bytes_read == 0 {
-                    Log::show("ERROR", "Connection closed by remote endpoint".to_string());
-                }
-                self.protocol = Protocol::from_bytes(&buffer[..bytes_read]);
-                Log::show(
-                    "INFO",
-                    format!(
-                        "Hello user #{} status {:?}",
-                        self.protocol.player.id, self.protocol.party_status
-                    ),
-                );
-            }
-            Err(e) => {
-                eprintln!("Read error: {}", e);
-            }
-        }
-    }
-
-    fn send_message(&mut self, bytes: &Vec<u8>) {
-        self.tcp.write_all(&bytes).unwrap();
-        self.tcp.flush().unwrap();
-    }
-
-    pub fn close_connection(&mut self) {
-        self.tcp
-            .shutdown(Shutdown::Both)
-            .expect("Failed to close connection");
-    }
-}
+//     fn send_message(&mut self, bytes: &Vec<u8>) {
+//         self.tcp.write_all(&bytes).unwrap();
+//         self.tcp.flush().unwrap();
+//     }
+// }
 
 pub struct Interface {}
 
@@ -94,81 +83,134 @@ impl Interface {
     }
 }
 
+unsafe impl Send for AppWindow {}
+unsafe impl Sync for AppWindow {}
+
 impl Controller {
     pub fn new(settings: Settings) -> Self {
+        let tcp = TcpStream::connect(format!("{}:{}", settings.host, settings.port))
+            .expect("Connection failed.");
         Self {
-            client: Client::new(&settings.host, &settings.port),
             settings: settings,
-            interface: AppWindow::new().unwrap(),
+            tcp: tcp,
+            protocol: Arc::new(Mutex::new(Protocol::default())),
+            interface: Arc::new(Mutex::new(AppWindow::new().unwrap())),
         }
     }
+
     pub fn run(&mut self) {
-        self.client.init();
-        self.init();
-        let _ = self.interface.run();
+        let ui = Arc::clone(&self.interface);
+        let protocol = Arc::clone(&self.protocol);
+        let protocol_for_closure = Arc::clone(&self.protocol);
+        let protocol_for_closure2 = Arc::clone(&self.protocol);
+        let mut tcp_stream = self.tcp.try_clone().unwrap();
+        thread::spawn(move || {
+            {
+                let protocol_mut = protocol_for_closure.lock().unwrap();
+                let bytes: Vec<u8> = protocol_mut.to_bytes();
+                tcp_stream.write_all(&bytes).unwrap();
+                tcp_stream.flush().unwrap();
+            }
+
+            let mut buffer: BufferSize = [0; 1024];
+            loop {
+                match tcp_stream.read(&mut buffer) {
+                    Ok(bytes_read) => {
+                        if bytes_read == 0 {
+                            Log::show("ERROR", "Connection closed by remote endpoint".to_string());
+                        }
+                        let updated_protocol = Protocol::from_bytes(&buffer[..bytes_read]);
+                        let mut protocol_guard = protocol_for_closure2.lock().unwrap();
+                        *protocol_guard = updated_protocol; // Update the content inside the Mutex
+                        Log::show(
+                            "INFO",
+                            format!(
+                                "User #{} status {:?}",
+                                protocol_guard.player.id, protocol_guard.party_status
+                            ),
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Read error: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        let tcp_stream = self.tcp.try_clone().unwrap();
+
+        Controller::init(ui, &tcp_stream, protocol)
     }
 
-    fn init(&mut self) {
-        Interface::reset_interface(&self.interface);
-        self.attach_event_handlers();
-        self.interface.set_menu_visible(true);
+    fn init(ui: Arc<Mutex<AppWindow>>, tcp_stream: &TcpStream, protocol: Arc<Mutex<Protocol>>) {
+        Controller::attach_event_handlers(&ui, &tcp_stream, protocol);
+        let ui_arc = ui.lock().expect("Error");
+        Interface::reset_interface(&ui_arc);
+        ui_arc.set_menu_visible(true);
+        let _ = ui_arc.run();
     }
 
-    fn starting_game(ui: &AppWindow, mut tcp_stream: &TcpStream) {
-        let mut buffer: BufferSize = [0; 1024];
-        let bytes_read: usize = tcp_stream.read(&mut buffer).expect("Read error");
-
-        let protocol = Protocol::from_bytes(&buffer[..bytes_read]);
-        if protocol.party_status == Status::Started {
-            Log::show("INFO", format!("GAME STARTED {:?}", protocol));
-            Interface::go_in_game(&ui);
+    fn process_game(
+        ui: Arc<Mutex<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: Arc<Mutex<Protocol>>,
+    ) {
+        let protocol_c = protocol.clone();
+        let protocl_arc = protocol_c.lock().unwrap();
+        match protocl_arc.party_status {
+            Status::Started => Controller::starting_game(ui, tcp_stream, protocol),
+            _ => Log::show("ERROR", format!("Status unknowned")),
         }
     }
+    fn starting_game(
+        ui: Arc<Mutex<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: Arc<Mutex<Protocol>>,
+    ) {
+    }
 
-    fn attach_event_handlers(&mut self) {
-        let ui_cloned = self.interface.clone_strong();
-        let mut protocol = self.client.protocol.clone();
-        let mut tcp_stream: TcpStream = self.client.tcp.try_clone().expect("Clone failed...");
+    fn attach_event_handlers(
+        ui: &Arc<Mutex<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: Arc<Mutex<Protocol>>,
+    ) {
+        let ui_cloned = ui.lock().unwrap().clone_strong();
+        let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
 
-        self.interface.on_event_game(move |data| {
+        let protocol_cloned_ = protocol.clone();
+        ui.lock().unwrap().on_event_game(move |data| {
             Log::show("INFO", data.to_string());
             if data.trim() == "CREATE" {
                 Interface::go_create_game_ui(&ui_cloned);
             } else {
+                let mut protocol_cloned = protocol_cloned_.lock().unwrap();
+                protocol_cloned.party_status = Status::JoinParty;
+
+                let bytes = protocol_cloned.to_bytes();
+                tcp_stream_.write_all(&bytes).unwrap();
+                tcp_stream_.flush().unwrap();
                 Interface::go_waiting_player(&ui_cloned);
-                protocol.party_status = Status::JoinParty;
-                let bytes = protocol.to_bytes();
-                tcp_stream.write_all(&bytes).unwrap();
-                tcp_stream.flush().unwrap();
-                Controller::starting_game(&ui_cloned, &tcp_stream)
             }
         });
 
-        let mut tcp_stream: TcpStream = self.client.tcp.try_clone().expect("Clone failed...");
-        let ui_cloned = self.interface.clone_strong();
-        let mut protocol = self.client.protocol.clone();
+        let ui_cloned = ui.lock().unwrap().clone_strong();
+        let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
 
-        self.interface.on_create_game(move || {
+        ui.lock().unwrap().on_create_game(move || {
             let total_round = ui_cloned.get_number_round();
             let bet = ui_cloned.get_number_bet();
+            let mut protocol_cloned = protocol.lock().unwrap();
+            protocol_cloned.bet = bet as u32;
+            protocol_cloned.total_round = total_round as u32;
+            protocol_cloned.party_status = Status::Created;
 
-            protocol.bet = bet as u32;
-            protocol.total_round = total_round as u32;
-            protocol.party_status = Status::Created;
+            let bytes = protocol_cloned.to_bytes();
 
-            let bytes = protocol.to_bytes();
+            tcp_stream__.write_all(&bytes).unwrap();
+            tcp_stream__.flush().unwrap();
 
-            tcp_stream.write_all(&bytes).unwrap();
-            tcp_stream.flush().unwrap();
-
-            let mut buffer: BufferSize = [0; 1024];
-            let bytes_read: usize = tcp_stream.read(&mut buffer).expect("Read error");
-
-            let protocol = Protocol::from_bytes(&buffer[..bytes_read]);
-            Log::show("INFO", format!("From server {:?}", protocol));
-
-            Interface::go_create_game_ui(&ui_cloned);
-            Controller::starting_game(&ui_cloned, &tcp_stream);
+            Interface::go_waiting_player(&ui_cloned);
         });
     }
 }

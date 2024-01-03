@@ -154,8 +154,10 @@ impl Player {
 
 impl Protocol {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend(&self.player.to_bytes());
+        let mut bytes = Vec::with_capacity(30); // Adjust the capacity based on your exact byte size
+
+        bytes.extend_from_slice(&self.player.to_bytes());
+
         bytes.push(match self.party_status {
             Status::Init => 0,
             Status::Created => 1,
@@ -164,19 +166,24 @@ impl Protocol {
             Status::Finished => 4,
             Status::JoinParty => 5,
         });
+
+        bytes.extend_from_slice(&self.total_round.to_be_bytes());
+        bytes.extend_from_slice(&self.round.to_be_bytes());
+        bytes.extend_from_slice(&self.bet.to_be_bytes());
+        bytes.extend_from_slice(&self.party_id.to_be_bytes());
+
         bytes.push(match self.play {
             PlayStatus::Betrail => 0,
             PlayStatus::Cooperate => 1,
             PlayStatus::Stanby => 2,
         });
-        bytes.extend(&self.total_round.to_be_bytes());
-        bytes.extend(&self.round.to_be_bytes());
-        bytes.extend(&self.bet.to_be_bytes());
-        bytes.extend(&self.party_id.to_be_bytes());
+
         bytes
     }
     pub fn from_bytes(bytes: &[u8]) -> Protocol {
-        let player_bytes: &[u8] = &bytes[..12];
+        const EXPECTED_LENGTH: usize = 30; // Update this based on your exact byte representation length
+
+        let player_bytes: &[u8; 12] = bytes.get(..12).unwrap().try_into().ok().unwrap();
         let player: Player = Player::from_bytes(player_bytes).unwrap();
 
         let party_status = match bytes[12] {
@@ -186,18 +193,19 @@ impl Protocol {
             3 => Status::Started,
             4 => Status::Finished,
             5 => Status::JoinParty,
-            _ => Status::Init,
+            _ => Status::Init, // Invalid status byte
         };
 
-        let total_round: u32 = u32::from_be_bytes([bytes[13], bytes[14], bytes[15], bytes[16]]);
-        let round: u32 = u32::from_be_bytes([bytes[17], bytes[18], bytes[19], bytes[20]]);
-        let bet: u32 = u32::from_be_bytes([bytes[21], bytes[22], bytes[23], bytes[24]]);
-        let party_id: u32 = u32::from_be_bytes([bytes[25], bytes[26], bytes[27], bytes[28]]);
+        let total_round = u32::from_be_bytes(bytes[13..17].try_into().unwrap());
+        let round = u32::from_be_bytes(bytes[17..21].try_into().unwrap());
+        let bet = u32::from_be_bytes(bytes[21..25].try_into().unwrap());
+        let party_id = u32::from_be_bytes(bytes[25..29].try_into().unwrap());
+
         let play = match bytes[29] {
             0 => PlayStatus::Betrail,
             1 => PlayStatus::Cooperate,
             2 => PlayStatus::Stanby,
-            _ => PlayStatus::Stanby,
+            _ => PlayStatus::Stanby, // Invalid play status byte
         };
 
         Protocol {

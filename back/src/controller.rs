@@ -106,7 +106,6 @@ impl Controller {
             println!("Find game {:?}", game_.id);
             if game_.round < game_.total_round {
                 game_.round += 1;
-                
             } else {
             }
         } else {
@@ -134,6 +133,7 @@ impl Controller {
 
             let players_to_send = [element.player1.clone(), element.player2.clone()];
             for player in players_to_send.iter() {
+                println!("Player send {:?}", player);
                 let tcp: TcpStream = Controller::get_stream(&players, player.id);
                 protocol_send.player = player.clone();
                 let bytes = protocol_send.to_bytes();
@@ -186,9 +186,9 @@ impl Controller {
         let players_stream_arc = players.lock().unwrap();
         return players_stream_arc
             .get(&player_id)
-            .unwrap()
+            .expect("Error get stream 1")
             .try_clone()
-            .unwrap();
+            .expect("Error get stream 2");
     }
 
     pub fn init_player(tcp_stream: &TcpStream, players: &Arc<Mutex<HashMap<u32, TcpStream>>>) {
