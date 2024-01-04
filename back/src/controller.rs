@@ -133,34 +133,71 @@ impl Controller {
                     } else if current_game.0 .1 == PlayStatus::Betrail
                         && current_game.1 .1 == PlayStatus::Cooperate
                     {
-                        current_game.0 .2 = current_game.0 .0.money as u32 - (protocol.bet * 2);
-                        current_game.0 .0.money = current_game.0 .2.into();
-                        current_game.1 .2 = current_game.1 .0.money as u32 + (protocol.bet * 2);
-                        current_game.1 .0.money = current_game.1 .2.into();
-                    } else if current_game.0 .1 == PlayStatus::Cooperate
-                        && current_game.1 .1 == PlayStatus::Betrail
-                    {
                         current_game.0 .2 = current_game.0 .0.money as u32 + (protocol.bet * 2);
                         current_game.0 .0.money = current_game.0 .2.into();
                         current_game.1 .2 = current_game.1 .0.money as u32 - (protocol.bet * 2);
                         current_game.1 .0.money = current_game.1 .2.into();
+                    } else if current_game.0 .1 == PlayStatus::Cooperate
+                        && current_game.1 .1 == PlayStatus::Betrail
+                    {
+                        current_game.0 .2 = current_game.0 .0.money as u32 - (protocol.bet * 2);
+                        current_game.0 .0.money = current_game.0 .2.into();
+                        current_game.1 .2 = current_game.1 .0.money as u32 + (protocol.bet * 2);
+                        current_game.1 .0.money = current_game.1 .2.into();
                     }
                     game_.round = game_.round + 1;
-                    let players_to_send = [current_game.0 .0.clone(), current_game.1 .0.clone()];
-                    let mut protocol_send = protocol.clone();
-                    protocol_send.round = game_.round;
-                    for player in players_to_send.iter() {
-                        let tcp: TcpStream = Controller::get_stream(&players, player.id);
-                        protocol_send.player = player.clone();
-                        protocol_send.play = PlayStatus::Stanby;
-                        println!("XXXXXXXXXXXXXXXXX Player send {:?}", protocol_send);
+                    if game_.round == game_.total_round {
+                        println!("GAME END");
+                        let player1 = current_game.0 .0.clone();
+                        let player2 = current_game.1 .0.clone();
+                        let status = Controller::get_party_status(&player1, &player2);
+                        let mut protocol_send = protocol.clone();
+                        protocol_send.party_status = status;
+                        let tcp: TcpStream = Controller::get_stream(&players, player1.id);
+                        protocol_send.player = player1.clone();
+                        println!("GAME END 1 {:?}", protocol_send);
+
                         let bytes = protocol_send.to_bytes();
                         Controller::send_message(&bytes, &tcp);
+
+                        let status = Controller::get_party_status(&player2, &player1);
+                        let mut protocol_send = protocol.clone();
+                        protocol_send.party_status = status;
+                        let tcp: TcpStream = Controller::get_stream(&players, player2.id);
+                        protocol_send.player = player2;
+
+                        println!("GAME END 2 {:?}", protocol_send);
+                        let bytes = protocol_send.to_bytes();
+                        Controller::send_message(&bytes, &tcp);
+                    } else {
+                        let players_to_send =
+                            [current_game.0 .0.clone(), current_game.1 .0.clone()];
+                        let mut protocol_send = protocol.clone();
+                        protocol_send.round = game_.round;
+                        for player in players_to_send.iter() {
+                            let tcp: TcpStream = Controller::get_stream(&players, player.id);
+                            protocol_send.player = player.clone();
+                            protocol_send.play = PlayStatus::Stanby;
+                            let bytes = protocol_send.to_bytes();
+                            Controller::send_message(&bytes, &tcp);
+                        }
                     }
                 }
+            } else {
+                println!("Party done");
             }
         } else {
             println!("Not party found");
+        }
+    }
+
+    fn get_party_status(player1: &Player, player2: &Player) -> Status {
+        if player1.money < player2.money {
+            return Status::Lose;
+        } else if player1.money > player2.money {
+            return Status::Win;
+        } else {
+            return Status::Equal;
         }
     }
 
@@ -221,7 +258,7 @@ impl Controller {
         party.player2 = player_from_protocol;
         party.bet = protocol.bet;
         party.total_round = protocol.total_round;
-        for _ in 1..protocol.total_round {
+        for _ in 0..protocol.total_round {
             party.party_round.round_played.push((
                 (Player::default(), PlayStatus::default(), 0 as u32),
                 (Player::default(), PlayStatus::default(), 0 as u32),

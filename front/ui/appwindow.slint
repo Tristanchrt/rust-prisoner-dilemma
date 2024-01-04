@@ -53,6 +53,22 @@ export component Searching {
             }
     }
 }
+
+export component EndGame {
+    in property <bool> is_visible; 
+    in property <string> status_game;
+
+    GridLayout {
+        visible: is_visible;
+            Row  {
+                Text {
+                    text: status-game + "!!";
+                    horizontal-alignment: center;
+                    color: black;
+                }
+            }
+    }
+}
 export component Waiting {
     in property <bool> is_visible; 
 
@@ -175,6 +191,7 @@ export component AppWindow inherits Window {
     in property <bool> create_visible;
     in property <bool> wait_visible;
     in property <bool> game_visible;
+    in property <bool> end_game_visible;
 
     in property <int> number_round;
     in property <int> number_bet;
@@ -183,6 +200,7 @@ export component AppWindow inherits Window {
     in property <int> total_rounds;
     in property <int> player_id;
     in property <float> player1_money;
+    in property <string> status_game;
     
     callback event-game(string);
     callback create_game();
@@ -214,6 +232,11 @@ export component AppWindow inherits Window {
         clicked =>{
             root.create_game();
         }
+    }
+
+    EndGame {
+        is_visible: end_game_visible;
+        status_game: status_game;
     }
 
     GameChoice {

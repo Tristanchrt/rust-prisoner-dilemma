@@ -14,6 +14,9 @@ pub enum Status {
     JoinParty,
     Started,
     Finished,
+    Win,
+    Lose,
+    Equal,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -165,6 +168,9 @@ impl Protocol {
             Status::Started => 3,
             Status::Finished => 4,
             Status::JoinParty => 5,
+            Status::Win => 6,
+            Status::Lose => 7,
+            Status::Equal => 8,
         });
 
         bytes.extend_from_slice(&self.total_round.to_be_bytes());
@@ -181,8 +187,6 @@ impl Protocol {
         bytes
     }
     pub fn from_bytes(bytes: &[u8]) -> Protocol {
-        const EXPECTED_LENGTH: usize = 30; // Update this based on your exact byte representation length
-
         let player_bytes: &[u8; 12] = bytes.get(..12).unwrap().try_into().ok().unwrap();
         let player: Player = Player::from_bytes(player_bytes).unwrap();
 
@@ -193,6 +197,9 @@ impl Protocol {
             3 => Status::Started,
             4 => Status::Finished,
             5 => Status::JoinParty,
+            6 => Status::Win,
+            7 => Status::Lose,
+            8 => Status::Equal,
             _ => Status::Init, // Invalid status byte
         };
 

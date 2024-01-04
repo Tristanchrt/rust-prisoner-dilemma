@@ -37,7 +37,11 @@ impl Interface {
         Interface::set_default_input(&ui);
         ui.set_create_visible(true);
     }
-
+    fn go_end_game(ui: &AppWindow, text: &str) {
+        Interface::reset_interface(&ui);
+        ui.set_end_game_visible(true);
+        ui.set_status_game(text.try_into().unwrap());
+    }
     fn go_in_game(ui: &AppWindow, party_id: u32, money: f64, round: u32, total_round: u32) {
         Interface::reset_interface(&ui);
         ui.set_game_visible(true);
@@ -102,6 +106,21 @@ impl Controller {
                                 let round = protocol_c.round;
                                 let total_round = protocol_c.total_round;
                                 Interface::go_in_game(&ui_arc, party_id, money, round, total_round);
+                            }
+                            Status::Win => {
+                                let text = "Win";
+                                let ui_arc = ui_for_closure.read().unwrap();
+                                Interface::go_end_game(&ui_arc, text);
+                            }
+                            Status::Lose => {
+                                let text = "Lose";
+                                let ui_arc = ui_for_closure.read().unwrap();
+                                Interface::go_end_game(&ui_arc, text);
+                            }
+                            Status::Equal => {
+                                let text = "Equal game";
+                                let ui_arc = ui_for_closure.read().unwrap();
+                                Interface::go_end_game(&ui_arc, text);
                             }
                             _ => Log::show("ERROR", format!("Status unknowned")),
                         }
