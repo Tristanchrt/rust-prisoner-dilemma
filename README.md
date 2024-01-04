@@ -13,21 +13,27 @@ The project demonstrates the classic game theory scenario of the Prisoner's Dile
 * If one player cooperates and the other defects, the defector receives a higher reward, and the cooperator receives nothing.
 
 
-## Features
+### Features
 
 * **TCP Communication** : Implements a server-client architecture for multiplayer gameplay using TCP sockets.
 * **Slint GUI** : Integrates the Slint framework to create an intuitive graphical user interface for players to make decisions and observe game outcomes.
 * **Prisoner's Dilemma Logic** : Implements the game logic, including the decision-making process based on strategies chosen by players.
 
 
-## Usage
+### Usage
 
 1. **Clone the Repository**
 2. **Build and Run**
 3. **Using the Application**
 4. **Run Test**
 
-## Code Structure
+### How to run
 
-- back : Logic of the game works with mutlithreading for handle multiple tcp connection at the same time
-- settings: Game logic, communication protocol, 
+> make runb // create back server
+> make runf // create client to play the game
+
+### Code Structure
+
+- **back**: Houses the game logic, employing multithreading to manage multiple TCP connections concurrently.
+- **settings**: Encompasses the game logic and communication protocols.
+- **front**: Interfaces with Slint and manages TCP streams for the graphical user interface and communication processes.

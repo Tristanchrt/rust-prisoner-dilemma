@@ -13,43 +13,8 @@ pub struct Controller {
     pub tcp: TcpStream,
     pub protocol: Arc<Mutex<Protocol>>,
 }
-
-type BufferSize = [u8; 1024];
-
-// impl Client {
-//     fn init(&mut self) {
-//         let bytes = self.protocol.to_bytes();
-//         self.send_message(&bytes);
-
-//         let mut buffer: BufferSize = [0; 1024];
-//         loop {
-//             match self.tcp.read(&mut buffer) {
-//                 Ok(bytes_read) => {
-//                     if bytes_read == 0 {
-//                         Log::show("ERROR", "Connection closed by remote endpoint".to_string());
-//                     }
-//                     self.protocol = Protocol::from_bytes(&buffer[..bytes_read]);
-//                     Log::show(
-//                         "INFO",
-//                         format!(
-//                             "Hello user #{} status {:?}",
-//                             self.protocol.player.id, self.protocol.party_status
-//                         ),
-//                     );
-//                 }
-//                 Err(e) => {
-//                     eprintln!("Read error: {}", e);
-//                     break;
-//                 }
-//             }
-//         }
-//     }
-
-//     fn send_message(&mut self, bytes: &Vec<u8>) {
-//         self.tcp.write_all(&bytes).unwrap();
-//         self.tcp.flush().unwrap();
-//     }
-// }
+const BUFFER_SIZE: usize = 1024;
+type BufferSize = [u8; BUFFER_SIZE];
 
 pub struct Interface {}
 
