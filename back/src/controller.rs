@@ -189,8 +189,6 @@ impl Controller {
             for player in players_to_send.iter() {
                 let tcp: TcpStream = Controller::get_stream(&players, player.id);
                 protocol_send.player = player.clone();
-                protocol_send.player.money = 100.0;
-
                 println!("XXXXXXXXXXXXX send {:?}", protocol_send);
                 let bytes = protocol_send.to_bytes();
                 Controller::send_message(&bytes, &tcp);

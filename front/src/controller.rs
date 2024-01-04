@@ -41,10 +41,10 @@ impl Interface {
     fn go_in_game(ui: &AppWindow, party_id: u32, money: f64, round: u32, total_round: u32) {
         Interface::reset_interface(&ui);
         ui.set_game_visible(true);
-        ui.set_party_id(party_id.try_into().unwrap());
+        ui.set_party_id(party_id as i32);
         ui.set_player1_money(money as f32);
-        ui.set_total_rounds(total_round.try_into().unwrap());
-        ui.set_party_rounds(round.try_into().unwrap());
+        ui.set_total_rounds(total_round as i32);
+        ui.set_party_rounds(round as i32);
     }
     fn go_waiting_player(ui: &AppWindow) {
         Interface::reset_interface(&ui);

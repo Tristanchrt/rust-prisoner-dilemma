@@ -59,7 +59,10 @@ pub struct Protocol {
 
 impl Default for Player {
     fn default() -> Self {
-        Self { id: 0, money: 0.0 }
+        Self {
+            id: 0,
+            money: 100.0,
+        }
     }
 }
 
