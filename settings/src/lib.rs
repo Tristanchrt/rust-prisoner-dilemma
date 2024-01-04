@@ -78,10 +78,7 @@ impl Default for PlayStatus {
 impl Default for PartyRound {
     fn default() -> Self {
         Self {
-            round_played: vec![(
-                (Player::default(), PlayStatus::default(), 0),
-                (Player::default(), PlayStatus::default(), 0),
-            )],
+            round_played: Vec::new(),
         }
     }
 }
@@ -91,7 +88,7 @@ impl Default for Party {
         Self {
             id: 0,
             total_round: 0,
-            round: 0,
+            round: 1,
             status: Status::default(),
             bet: 0,
             winner: None,

@@ -147,39 +147,12 @@ export component GameChoice {
     in property <int> party_rounds;
     in property <float> player1_money;
     in property <bool> is_visible;
+    in property <int> total_rounds;
 
 
     callback party_betray();
-    callback party_cooperat();
-
-    GridLayout {
-        visible: is_visible;
-        padding-right: 24px;
-        padding-left: 24px;
-        padding-top: 24px;
-        padding-bottom: 24px;
-        VerticalBox {
-            Text {
-                text: "Party  #"+ party_id +" round: " + party_rounds;
-                font-italic: true;
-                horizontal-alignment: center;
-                color: black;
-                height: 32px;
-                font-weight: 800;
-                font-size: 16px;
-            }
-            HorizontalBox {
-                height: 32px;
-                Text {
-                    text: "Player 1: " + player1_money;
-                    font-italic: true;
-                    horizontal-alignment: center;
-                    color: black;
-                }
-            }
-            Button {
-                height: 32px;
-                text: "Cooperat";
+    callback party_cooperat(); GridLayout { 
+        visible: is_visible; padding-right: 24px; padding-left: 24px; padding-top: 24px; padding-bottom: 24px; VerticalBox { Text { text: "Party  #"+ party_id +" round: " + party_rounds + "/" + total_rounds; font-italic: true; horizontal-alignment: center; color: black; height: 32px; font-weight: 800; font-size: 16px; } HorizontalBox { height: 32px; Text { text: "Player: " + player1_money; font-italic: true; horizontal-alignment: center; color: black; } } Button { height: 32px; text: "Cooperat";
                 clicked => {
                     root.party_cooperat()
                 }
@@ -207,6 +180,7 @@ export component AppWindow inherits Window {
     in property <int> number_bet;
     in property <int> party_id;
     in property <int> party_rounds;
+    in property <int> total_rounds;
     in property <int> player_id;
     in property <float> player1_money;
     
@@ -247,6 +221,7 @@ export component AppWindow inherits Window {
         party_id: party_id;
         party_rounds: party_rounds;
         player1_money: player1_money;
+        total_rounds: total_rounds;
         party_betray => {
             root.party_betray();
         }

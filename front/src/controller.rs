@@ -1,15 +1,15 @@
 slint::include_modules!();
-use settings::{Log, Protocol, Settings, Status};
+use settings::{Log, PlayStatus, Protocol, Settings, Status};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub struct Controller {
     pub settings: Settings,
-    pub interface: Arc<Mutex<AppWindow>>,
+    pub interface: Arc<RwLock<AppWindow>>,
     pub tcp: TcpStream,
     pub protocol: Arc<Mutex<Protocol>>,
 }
@@ -38,8 +38,13 @@ impl Interface {
         ui.set_create_visible(true);
     }
 
-    fn go_in_game(ui: &AppWindow) {
-        ui.set_search_visible(true);
+    fn go_in_game(ui: &AppWindow, party_id: u32, money: f64, round: u32, total_round: u32) {
+        Interface::reset_interface(&ui);
+        ui.set_game_visible(true);
+        ui.set_party_id(party_id.try_into().unwrap());
+        ui.set_player1_money(money as f32);
+        ui.set_total_rounds(total_round.try_into().unwrap());
+        ui.set_party_rounds(round.try_into().unwrap());
     }
     fn go_waiting_player(ui: &AppWindow) {
         Interface::reset_interface(&ui);
@@ -58,7 +63,7 @@ impl Controller {
             settings: settings,
             tcp: tcp,
             protocol: Arc::new(Mutex::new(Protocol::default())),
-            interface: Arc::new(Mutex::new(AppWindow::new().unwrap())),
+            interface: Arc::new(RwLock::new(AppWindow::new().unwrap())),
         }
     }
 
@@ -91,9 +96,12 @@ impl Controller {
                         let protocol_c = protocol_guard.clone();
                         match protocol_c.party_status {
                             Status::Started => {
-                                println!("EOLA");
-                                let ui_arc = ui_for_closure.lock().unwrap();
-                                ui_arc.clone_strong().set_search_visible(true);
+                                let ui_arc = ui_for_closure.read().unwrap();
+                                let party_id = protocol_c.party_id;
+                                let money = protocol_c.player.money;
+                                let round = protocol_c.round;
+                                let total_round = protocol_c.total_round;
+                                Interface::go_in_game(&ui_arc, party_id, money, round, total_round);
                             }
                             _ => Log::show("ERROR", format!("Status unknowned")),
                         }
@@ -111,16 +119,16 @@ impl Controller {
         Controller::init(ui, &tcp_stream, protocol)
     }
 
-    fn init(ui: Arc<Mutex<AppWindow>>, tcp_stream: &TcpStream, protocol: Arc<Mutex<Protocol>>) {
+    fn init(ui: Arc<RwLock<AppWindow>>, tcp_stream: &TcpStream, protocol: Arc<Mutex<Protocol>>) {
         Controller::attach_event_handlers(&ui, &tcp_stream, protocol);
-        let ui_arc = ui.lock().expect("Error");
+        let ui_arc = ui.read().expect("Error");
         Interface::reset_interface(&ui_arc);
         ui_arc.set_menu_visible(true);
         let _ = ui_arc.run();
     }
 
     fn process_game(
-        ui: &Arc<Mutex<AppWindow>>,
+        ui: &Arc<RwLock<AppWindow>>,
         tcp_stream: &TcpStream,
         protocol: &Arc<Mutex<Protocol>>,
     ) {
@@ -140,15 +148,15 @@ impl Controller {
     }
 
     fn attach_event_handlers(
-        ui: &Arc<Mutex<AppWindow>>,
+        ui: &Arc<RwLock<AppWindow>>,
         tcp_stream: &TcpStream,
         protocol: Arc<Mutex<Protocol>>,
     ) {
-        let ui_cloned = ui.lock().unwrap().clone_strong();
+        let ui_cloned = ui.read().unwrap().clone_strong();
         let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
 
         let protocol_cloned_ = protocol.clone();
-        ui.lock().unwrap().on_event_game(move |data| {
+        ui.read().unwrap().on_event_game(move |data| {
             Log::show("INFO", data.to_string());
             if data.trim() == "CREATE" {
                 Interface::go_create_game_ui(&ui_cloned);
@@ -164,13 +172,14 @@ impl Controller {
             }
         });
 
-        let ui_cloned = ui.lock().unwrap().clone_strong();
+        let ui_cloned = ui.read().unwrap().clone_strong();
         let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
+        let protocol_cloned_ = protocol.clone();
 
-        ui.lock().unwrap().on_create_game(move || {
+        ui.read().unwrap().on_create_game(move || {
             let total_round = ui_cloned.get_number_round();
             let bet = ui_cloned.get_number_bet();
-            let mut protocol_cloned = protocol.lock().unwrap();
+            let mut protocol_cloned = protocol_cloned_.lock().unwrap();
             protocol_cloned.bet = bet as u32;
             protocol_cloned.total_round = total_round as u32;
             protocol_cloned.party_status = Status::Created;
@@ -181,5 +190,37 @@ impl Controller {
 
             Interface::go_waiting_player(&ui_cloned);
         });
+
+        let ui_cloned = ui.read().unwrap().clone_strong();
+        let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
+        let protocol_cloned_ = protocol.clone();
+
+        ui.read().unwrap().on_party_betray(move || {
+            let mut protocol_cloned = protocol_cloned_.lock().unwrap();
+            protocol_cloned.play = PlayStatus::Betrail;
+
+            let bytes = protocol_cloned.to_bytes();
+
+            tcp_stream__.write_all(&bytes).unwrap();
+            tcp_stream__.flush().unwrap();
+
+            Interface::go_waiting_player(&ui_cloned);
+        });
+
+        let ui_cloned = ui.read().unwrap().clone_strong();
+        let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
+        let protocol_cloned_ = protocol.clone();
+
+        ui.read().unwrap().on_party_cooperat(move || {
+            let mut protocol_cloned = protocol_cloned_.lock().unwrap();
+            protocol_cloned.play = PlayStatus::Cooperate;
+
+            let bytes = protocol_cloned.to_bytes();
+
+            tcp_stream__.write_all(&bytes).unwrap();
+            tcp_stream__.flush().unwrap();
+
+            Interface::go_waiting_player(&ui_cloned);
+        })
     }
 }

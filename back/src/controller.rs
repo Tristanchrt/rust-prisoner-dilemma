@@ -1,5 +1,5 @@
 use rand::Rng;
-use settings::{Game, Log, Party, Player, Protocol, Settings, Status};
+use settings::{Game, Log, Party, PlayStatus, Player, Protocol, Settings, Status};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -101,12 +101,63 @@ impl Controller {
         if let Some(game_) = game_arc
             .parties
             .iter_mut()
-            .find(|element| element.id == protocol.party_id)
+            .find(|element: &&mut Party| element.id == protocol.party_id)
         {
-            println!("Find game {:?}", game_.id);
-            if game_.round < game_.total_round {
-                game_.round += 1;
-            } else {
+            let data = protocol.clone();
+            if let Some(current_game) = game_
+                .party_round
+                .round_played
+                .get_mut((data.round as usize) - 1)
+            {
+                if current_game.0 .0.id == 0 {
+                    current_game.0 .0 = data.player;
+                    current_game.0 .1 = data.play;
+                } else if current_game.1 .0.id == 0 {
+                    current_game.1 .0 = data.player;
+                    current_game.1 .1 = data.play;
+
+                    if current_game.0 .1 == PlayStatus::Betrail
+                        && current_game.1 .1 == PlayStatus::Betrail
+                    {
+                        current_game.0 .2 = current_game.0 .0.money as u32 - protocol.bet;
+                        current_game.0 .0.money = current_game.0 .2.into();
+                        current_game.1 .2 = current_game.1 .0.money as u32 - protocol.bet;
+                        current_game.1 .0.money = current_game.1 .2.into();
+                    } else if current_game.0 .1 == PlayStatus::Cooperate
+                        && current_game.1 .1 == PlayStatus::Cooperate
+                    {
+                        current_game.0 .2 = current_game.0 .0.money as u32 + (protocol.bet / 2);
+                        current_game.0 .0.money = current_game.0 .2.into();
+                        current_game.1 .2 = current_game.1 .0.money as u32 + (protocol.bet / 2);
+                        current_game.1 .0.money = current_game.1 .2.into();
+                    } else if current_game.0 .1 == PlayStatus::Betrail
+                        && current_game.1 .1 == PlayStatus::Cooperate
+                    {
+                        current_game.0 .2 = current_game.0 .0.money as u32 - (protocol.bet * 2);
+                        current_game.0 .0.money = current_game.0 .2.into();
+                        current_game.1 .2 = current_game.1 .0.money as u32 + (protocol.bet * 2);
+                        current_game.1 .0.money = current_game.1 .2.into();
+                    } else if current_game.0 .1 == PlayStatus::Cooperate
+                        && current_game.1 .1 == PlayStatus::Betrail
+                    {
+                        current_game.0 .2 = current_game.0 .0.money as u32 + (protocol.bet * 2);
+                        current_game.0 .0.money = current_game.0 .2.into();
+                        current_game.1 .2 = current_game.1 .0.money as u32 - (protocol.bet * 2);
+                        current_game.1 .0.money = current_game.1 .2.into();
+                    }
+                    game_.round = game_.round + 1;
+                    let players_to_send = [current_game.0 .0.clone(), current_game.1 .0.clone()];
+                    let mut protocol_send = protocol.clone();
+                    protocol_send.round = game_.round;
+                    for player in players_to_send.iter() {
+                        let tcp: TcpStream = Controller::get_stream(&players, player.id);
+                        protocol_send.player = player.clone();
+                        protocol_send.play = PlayStatus::Stanby;
+                        println!("XXXXXXXXXXXXXXXXX Player send {:?}", protocol_send);
+                        let bytes = protocol_send.to_bytes();
+                        Controller::send_message(&bytes, &tcp);
+                    }
+                }
             }
         } else {
             println!("Not party found");
@@ -130,12 +181,17 @@ impl Controller {
 
             let mut protocol_send = protocol.clone();
             protocol_send.party_status = Status::Started;
+            protocol_send.bet = element.bet;
+            protocol_send.total_round = element.total_round;
+            protocol_send.party_id = element.id;
+            protocol_send.round = 1;
             let players_to_send = [element.player1.clone(), element.player2.clone()];
             for player in players_to_send.iter() {
-                println!("Player send {:?}", player);
                 let tcp: TcpStream = Controller::get_stream(&players, player.id);
                 protocol_send.player = player.clone();
                 protocol_send.player.money = 100.0;
+
+                println!("XXXXXXXXXXXXX send {:?}", protocol_send);
                 let bytes = protocol_send.to_bytes();
                 Controller::send_message(&bytes, &tcp);
             }
@@ -165,6 +221,14 @@ impl Controller {
 
         party.player1 = default_player;
         party.player2 = player_from_protocol;
+        party.bet = protocol.bet;
+        party.total_round = protocol.total_round;
+        for _ in 1..protocol.total_round {
+            party.party_round.round_played.push((
+                (Player::default(), PlayStatus::default(), 0 as u32),
+                (Player::default(), PlayStatus::default(), 0 as u32),
+            ))
+        }
 
         let player_id: u32 = protocol.player.id;
 
