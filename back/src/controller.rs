@@ -130,12 +130,12 @@ impl Controller {
 
             let mut protocol_send = protocol.clone();
             protocol_send.party_status = Status::Started;
-
             let players_to_send = [element.player1.clone(), element.player2.clone()];
             for player in players_to_send.iter() {
                 println!("Player send {:?}", player);
                 let tcp: TcpStream = Controller::get_stream(&players, player.id);
                 protocol_send.player = player.clone();
+                protocol_send.player.money = 100.0;
                 let bytes = protocol_send.to_bytes();
                 Controller::send_message(&bytes, &tcp);
             }

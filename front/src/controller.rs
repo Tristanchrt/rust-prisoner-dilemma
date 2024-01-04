@@ -74,8 +74,7 @@ impl Interface {
     }
 
     fn go_in_game(ui: &AppWindow) {
-        Interface::reset_interface(&ui);
-        ui.set_game_visible(true);
+        ui.set_search_visible(true);
     }
     fn go_waiting_player(ui: &AppWindow) {
         Interface::reset_interface(&ui);
@@ -100,9 +99,10 @@ impl Controller {
 
     pub fn run(&mut self) {
         let ui = Arc::clone(&self.interface);
+        let ui_for_closure = Arc::clone(&self.interface);
         let protocol = Arc::clone(&self.protocol);
         let protocol_for_closure = Arc::clone(&self.protocol);
-        let protocol_for_closure2 = Arc::clone(&self.protocol);
+        let protocol_for_closure_read = Arc::clone(&self.protocol);
         let mut tcp_stream = self.tcp.try_clone().unwrap();
         thread::spawn(move || {
             {
@@ -116,19 +116,22 @@ impl Controller {
             loop {
                 match tcp_stream.read(&mut buffer) {
                     Ok(bytes_read) => {
-                        if bytes_read == 0 {
-                            Log::show("ERROR", "Connection closed by remote endpoint".to_string());
-                        }
+                        if bytes_read == 0 {}
+                        Log::show("ERROR", "Connection closed by remote endpoint".to_string());
                         let updated_protocol = Protocol::from_bytes(&buffer[..bytes_read]);
-                        let mut protocol_guard = protocol_for_closure2.lock().unwrap();
+                        let mut protocol_guard = protocol_for_closure_read.lock().unwrap();
                         *protocol_guard = updated_protocol; // Update the content inside the Mutex
-                        Log::show(
-                            "INFO",
-                            format!(
-                                "User #{} status {:?}",
-                                protocol_guard.player.id, protocol_guard.party_status
-                            ),
-                        );
+                        Log::show("INFO", format!("Protocol : {:?}", protocol_guard));
+
+                        let protocol_c = protocol_guard.clone();
+                        match protocol_c.party_status {
+                            Status::Started => {
+                                println!("EOLA");
+                                let ui_arc = ui_for_closure.lock().unwrap();
+                                ui_arc.clone_strong().set_search_visible(true);
+                            }
+                            _ => Log::show("ERROR", format!("Status unknowned")),
+                        }
                     }
                     Err(e) => {
                         eprintln!("Read error: {}", e);
@@ -152,22 +155,23 @@ impl Controller {
     }
 
     fn process_game(
-        ui: Arc<Mutex<AppWindow>>,
+        ui: &Arc<Mutex<AppWindow>>,
         tcp_stream: &TcpStream,
-        protocol: Arc<Mutex<Protocol>>,
+        protocol: &Arc<Mutex<Protocol>>,
     ) {
         let protocol_c = protocol.clone();
         let protocl_arc = protocol_c.lock().unwrap();
         match protocl_arc.party_status {
-            Status::Started => Controller::starting_game(ui, tcp_stream, protocol),
+            Status::Started => println!("toto"),
             _ => Log::show("ERROR", format!("Status unknowned")),
         }
     }
     fn starting_game(
-        ui: Arc<Mutex<AppWindow>>,
+        ui: &Arc<Mutex<AppWindow>>,
         tcp_stream: &TcpStream,
-        protocol: Arc<Mutex<Protocol>>,
+        protocol: &Arc<Mutex<Protocol>>,
     ) {
+        println!("TTTTTTTTTTESSS");
     }
 
     fn attach_event_handlers(
@@ -190,6 +194,7 @@ impl Controller {
                 let bytes = protocol_cloned.to_bytes();
                 tcp_stream_.write_all(&bytes).unwrap();
                 tcp_stream_.flush().unwrap();
+
                 Interface::go_waiting_player(&ui_cloned);
             }
         });
@@ -206,7 +211,6 @@ impl Controller {
             protocol_cloned.party_status = Status::Created;
 
             let bytes = protocol_cloned.to_bytes();
-
             tcp_stream__.write_all(&bytes).unwrap();
             tcp_stream__.flush().unwrap();
 
