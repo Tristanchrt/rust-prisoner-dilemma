@@ -26,6 +26,17 @@ pub enum PlayStatus {
     Stanby,
 }
 
+impl PlayStatus {
+    // Custom method to convert enum variant to string
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            PlayStatus::Betrail => "Betrayal",
+            PlayStatus::Cooperate => "Cooperate",
+            PlayStatus::Stanby => "Standby",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PartyRound {
     pub round_played: Vec<((Player, PlayStatus, u32), (Player, PlayStatus, u32))>,

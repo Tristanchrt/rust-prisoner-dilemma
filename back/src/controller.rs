@@ -1,4 +1,5 @@
 use rand::Rng;
+use rust_xlsxwriter::*;
 use settings::{Game, Log, Party, PlayStatus, Player, Protocol, Settings, Status};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -107,7 +108,7 @@ impl Controller {
             if let Some(current_game) = game_
                 .party_round
                 .round_played
-                .get_mut((data.round as usize) - 1)
+                .get_mut((data.round as usize))
             {
                 if current_game.0 .0.id == 0 {
                     current_game.0 .0 = data.player;
@@ -169,6 +170,7 @@ impl Controller {
                         println!("GAME END 2 {:?}", protocol_send);
                         let bytes = protocol_send.to_bytes();
                         Controller::send_message(&bytes, &tcp);
+                        let _ = Controller::write_result(&game_);
                     } else {
                         let players_to_send =
                             [current_game.0 .0.clone(), current_game.1 .0.clone()];
@@ -183,12 +185,48 @@ impl Controller {
                         }
                     }
                 }
-            } else {
-                println!("Party done");
             }
         } else {
             println!("Not party found");
         }
+    }
+
+    fn write_result(game: &Party) -> Result<(), XlsxError> {
+        let mut workbook = Workbook::new();
+        let worksheet = workbook.add_worksheet();
+        //  let headers = [
+        //             "GameId",
+        //             "Player1",
+        //             "Player 1 Play",
+        //             "Player 1 Money",
+        //             "Player2",
+        //             "Player 2 Play",
+        //             "Player 2 Money",
+        //         ];
+
+        //         for (col, &header) in headers.iter().enumerate() {
+        //             worksheet.write(0, col.try_into().unwrap(), header)?;
+        //         }
+        worksheet.write(0, 0, "GameId")?;
+        worksheet.write(0, 1, "Player1")?;
+        worksheet.write(0, 2, "Player 1 Play")?;
+        worksheet.write(0, 3, "Player 1 Money")?;
+        worksheet.write(0, 4, "Player2")?;
+        worksheet.write(0, 5, "Player 2 Play")?;
+        worksheet.write(0, 6, "Player 2 Money")?;
+
+        for (index, round) in game.party_round.round_played.iter().enumerate() {
+            let adjusted_index = index + 1;
+            worksheet.write(adjusted_index as u32, 0, game.id)?;
+            worksheet.write(adjusted_index as u32, 1, round.0 .0.id)?;
+            worksheet.write(adjusted_index as u32, 2, round.0 .1.to_string())?;
+            worksheet.write(adjusted_index as u32, 3, round.0 .0.money)?;
+            worksheet.write(adjusted_index as u32, 4, round.1 .0.id)?;
+            worksheet.write(adjusted_index as u32, 5, round.1 .1.to_string())?;
+            worksheet.write(adjusted_index as u32, 6, round.1 .0.money)?;
+        }
+        workbook.save(format!("../game_{}.xlsx", game.id))?;
+        Ok(())
     }
 
     fn get_party_status(player1: &Player, player2: &Player) -> Status {

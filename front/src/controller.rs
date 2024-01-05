@@ -122,7 +122,7 @@ impl Controller {
                                 let ui_arc = ui_for_closure.read().unwrap();
                                 Interface::go_end_game(&ui_arc, text);
                             }
-                            _ => Log::show("ERROR", format!("Status unknowned")),
+                            _ => (),
                         }
                     }
                     Err(e) => {
