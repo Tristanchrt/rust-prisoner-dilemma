@@ -60,18 +60,16 @@ impl Controller {
             match tcp_stream.read(&mut buffer) {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
-                        println!("Client disconnected");
+                        Log::show("INFO", format!("Client disconnected"));
                         break;
                     }
 
                     let protocol: Protocol = Protocol::from_bytes(&buffer[..bytes_read]);
 
-                    println!("Get new message {:?}", protocol);
-
                     Controller::handle_party(&protocol, &tcp_stream, &game, &players);
                 }
                 Err(e) => {
-                    println!("Error reading from socket: {:?}", e);
+                    Log::show("Error", format!("reading from socket: {:?}", e));
                     break;
                 }
             }
@@ -89,8 +87,7 @@ impl Controller {
             Status::Created => Controller::create_game(&protocol, &players, &game),
             Status::JoinParty => Controller::join_game(&protocol, &players, &game),
             Status::Started => Controller::process_game(&protocol, &players, &game),
-            Status::Finished => println!("4"),
-            _ => println!("Something went wrong with the Party status"),
+            _ => Log::show("WARN", format!("No status found")),
         }
     }
     pub fn process_game(
@@ -148,7 +145,6 @@ impl Controller {
                     }
                     game_.round = game_.round + 1;
                     if game_.round > game_.total_round {
-                        println!("GAME END");
                         let player1 = current_game.0 .0.clone();
                         let player2 = current_game.1 .0.clone();
                         let status = Controller::get_party_status(&player1, &player2);
@@ -156,7 +152,6 @@ impl Controller {
                         protocol_send.party_status = status;
                         let tcp: TcpStream = Controller::get_stream(&players, player1.id);
                         protocol_send.player = player1.clone();
-                        println!("GAME END 1 {:?}", protocol_send);
 
                         let bytes = protocol_send.to_bytes();
                         Controller::send_message(&bytes, &tcp);
@@ -167,7 +162,6 @@ impl Controller {
                         let tcp: TcpStream = Controller::get_stream(&players, player2.id);
                         protocol_send.player = player2;
 
-                        println!("GAME END 2 {:?}", protocol_send);
                         let bytes = protocol_send.to_bytes();
                         Controller::send_message(&bytes, &tcp);
                         let _ = Controller::write_result(&game_);
@@ -187,7 +181,7 @@ impl Controller {
                 }
             }
         } else {
-            println!("Not party found");
+            Log::show("WARN", format!("Not party found"));
         }
     }
 
@@ -243,7 +237,6 @@ impl Controller {
             .iter_mut()
             .find(|element| element.status == Status::WaitingPlayer)
         {
-            println!("Find game {:?}", element.id);
             element.player1 = protocol.player.clone();
             element.status = Status::Started;
 
@@ -257,12 +250,11 @@ impl Controller {
             for player in players_to_send.iter() {
                 let tcp: TcpStream = Controller::get_stream(&players, player.id);
                 protocol_send.player = player.clone();
-                println!("XXXXXXXXXXXXX send {:?}", protocol_send);
                 let bytes = protocol_send.to_bytes();
                 Controller::send_message(&bytes, &tcp);
             }
         } else {
-            println!("Not party found");
+            Log::show("WARN", format!("No party found"));
         }
     }
 

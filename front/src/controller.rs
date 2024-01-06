@@ -126,7 +126,7 @@ impl Controller {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Read error: {}", e);
+                        Log::show("ERROR", format!("Erreur read"));
                         break;
                     }
                 }
@@ -139,31 +139,11 @@ impl Controller {
     }
 
     fn init(ui: Arc<RwLock<AppWindow>>, tcp_stream: &TcpStream, protocol: Arc<Mutex<Protocol>>) {
+        let ui_arc = ui.read().expect("Error reading intreface");
         Controller::attach_event_handlers(&ui, &tcp_stream, protocol);
-        let ui_arc = ui.read().expect("Error");
         Interface::reset_interface(&ui_arc);
         ui_arc.set_menu_visible(true);
         let _ = ui_arc.run();
-    }
-
-    fn process_game(
-        ui: &Arc<RwLock<AppWindow>>,
-        tcp_stream: &TcpStream,
-        protocol: &Arc<Mutex<Protocol>>,
-    ) {
-        let protocol_c = protocol.clone();
-        let protocl_arc = protocol_c.lock().unwrap();
-        match protocl_arc.party_status {
-            Status::Started => println!("toto"),
-            _ => Log::show("ERROR", format!("Status unknowned")),
-        }
-    }
-    fn starting_game(
-        ui: &Arc<Mutex<AppWindow>>,
-        tcp_stream: &TcpStream,
-        protocol: &Arc<Mutex<Protocol>>,
-    ) {
-        println!("TTTTTTTTTTESSS");
     }
 
     fn attach_event_handlers(
@@ -171,10 +151,21 @@ impl Controller {
         tcp_stream: &TcpStream,
         protocol: Arc<Mutex<Protocol>>,
     ) {
-        let ui_cloned = ui.read().unwrap().clone_strong();
-        let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
+        Self::attach_event_game(&ui, &tcp_stream, &protocol);
+        Self::attach_create_game(&ui, &tcp_stream, &protocol);
+        Self::attach_party_betray(&ui, &tcp_stream, &protocol);
+        Self::attach_party_cooperat(&ui, &tcp_stream, &protocol);
+    }
 
-        let protocol_cloned_ = protocol.clone();
+    fn attach_event_game(
+        ui: &Arc<RwLock<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: &Arc<Mutex<Protocol>>,
+    ) {
+        let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
+        let ui_cloned = ui.read().unwrap().clone_strong();
+        let protocol_cloned_ = Arc::clone(&protocol);
+
         ui.read().unwrap().on_event_game(move |data| {
             Log::show("INFO", data.to_string());
             if data.trim() == "CREATE" {
@@ -190,10 +181,16 @@ impl Controller {
                 Interface::go_waiting_player(&ui_cloned);
             }
         });
+    }
 
+    fn attach_create_game(
+        ui: &Arc<RwLock<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: &Arc<Mutex<Protocol>>,
+    ) {
+        let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
         let ui_cloned = ui.read().unwrap().clone_strong();
-        let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
-        let protocol_cloned_ = protocol.clone();
+        let protocol_cloned_ = Arc::clone(&protocol);
 
         ui.read().unwrap().on_create_game(move || {
             let total_round = ui_cloned.get_number_round();
@@ -204,42 +201,50 @@ impl Controller {
             protocol_cloned.party_status = Status::Created;
 
             let bytes = protocol_cloned.to_bytes();
-            tcp_stream__.write_all(&bytes).unwrap();
-            tcp_stream__.flush().unwrap();
+            tcp_stream_.write_all(&bytes).unwrap();
+            tcp_stream_.flush().unwrap();
 
             Interface::go_waiting_player(&ui_cloned);
         });
+    }
 
+    fn attach_party_betray(
+        ui: &Arc<RwLock<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: &Arc<Mutex<Protocol>>,
+    ) {
+        let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
         let ui_cloned = ui.read().unwrap().clone_strong();
-        let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
-        let protocol_cloned_ = protocol.clone();
-
+        let protocol_cloned_ = Arc::clone(&protocol);
         ui.read().unwrap().on_party_betray(move || {
             let mut protocol_cloned = protocol_cloned_.lock().unwrap();
             protocol_cloned.play = PlayStatus::Betrail;
 
             let bytes = protocol_cloned.to_bytes();
-
-            tcp_stream__.write_all(&bytes).unwrap();
-            tcp_stream__.flush().unwrap();
+            tcp_stream_.write_all(&bytes).unwrap();
+            tcp_stream_.flush().unwrap();
 
             Interface::go_waiting_player(&ui_cloned);
         });
+    }
 
+    fn attach_party_cooperat(
+        ui: &Arc<RwLock<AppWindow>>,
+        tcp_stream: &TcpStream,
+        protocol: &Arc<Mutex<Protocol>>,
+    ) {
+        let mut tcp_stream_: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
         let ui_cloned = ui.read().unwrap().clone_strong();
-        let mut tcp_stream__: TcpStream = tcp_stream.try_clone().expect("Clone failed...");
-        let protocol_cloned_ = protocol.clone();
-
+        let protocol_cloned_ = Arc::clone(&protocol);
         ui.read().unwrap().on_party_cooperat(move || {
             let mut protocol_cloned = protocol_cloned_.lock().unwrap();
             protocol_cloned.play = PlayStatus::Cooperate;
 
             let bytes = protocol_cloned.to_bytes();
-
-            tcp_stream__.write_all(&bytes).unwrap();
-            tcp_stream__.flush().unwrap();
+            tcp_stream_.write_all(&bytes).unwrap();
+            tcp_stream_.flush().unwrap();
 
             Interface::go_waiting_player(&ui_cloned);
-        })
+        });
     }
 }
