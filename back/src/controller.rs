@@ -105,7 +105,7 @@ impl Controller {
             if let Some(current_game) = game_
                 .party_round
                 .round_played
-                .get_mut(((data.round - 1) as usize))
+                .get_mut((data.round - 1) as usize)
             {
                 if current_game.0 .0.id == 0 {
                     current_game.0 .0 = data.player;
@@ -203,14 +203,14 @@ impl Controller {
         }
 
         for (index, round) in game.party_round.round_played.iter().enumerate() {
-            let adjusted_index = index + 1;
-            worksheet.write(adjusted_index as u32, 0, game.id)?;
-            worksheet.write(adjusted_index as u32, 1, round.0 .0.id)?;
-            worksheet.write(adjusted_index as u32, 2, round.0 .1.to_string())?;
-            worksheet.write(adjusted_index as u32, 3, round.0 .0.money)?;
-            worksheet.write(adjusted_index as u32, 4, round.1 .0.id)?;
-            worksheet.write(adjusted_index as u32, 5, round.1 .1.to_string())?;
-            worksheet.write(adjusted_index as u32, 6, round.1 .0.money)?;
+            let adjusted_index = index as u32 + 1;
+            worksheet.write(adjusted_index, 0, game.id)?;
+            worksheet.write(adjusted_index, 1, round.0 .0.id)?;
+            worksheet.write(adjusted_index, 2, round.0 .1.to_string())?;
+            worksheet.write(adjusted_index, 3, round.0 .0.money)?;
+            worksheet.write(adjusted_index, 4, round.1 .0.id)?;
+            worksheet.write(adjusted_index, 5, round.1 .1.to_string())?;
+            worksheet.write(adjusted_index, 6, round.1 .0.money)?;
         }
         workbook.save(format!("../game_{}.xlsx", game.id))?;
         Ok(())
