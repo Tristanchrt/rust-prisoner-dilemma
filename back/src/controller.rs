@@ -108,7 +108,7 @@ impl Controller {
             if let Some(current_game) = game_
                 .party_round
                 .round_played
-                .get_mut((data.round as usize))
+                .get_mut(((data.round - 1) as usize))
             {
                 if current_game.0 .0.id == 0 {
                     current_game.0 .0 = data.player;
@@ -147,7 +147,7 @@ impl Controller {
                         current_game.1 .0.money = current_game.1 .2.into();
                     }
                     game_.round = game_.round + 1;
-                    if game_.round == game_.total_round {
+                    if game_.round > game_.total_round {
                         println!("GAME END");
                         let player1 = current_game.0 .0.clone();
                         let player2 = current_game.1 .0.clone();
@@ -194,26 +194,19 @@ impl Controller {
     fn write_result(game: &Party) -> Result<(), XlsxError> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
-        //  let headers = [
-        //             "GameId",
-        //             "Player1",
-        //             "Player 1 Play",
-        //             "Player 1 Money",
-        //             "Player2",
-        //             "Player 2 Play",
-        //             "Player 2 Money",
-        //         ];
+        let headers = [
+            "GameId",
+            "Player1",
+            "Player 1 Play",
+            "Player 1 Money",
+            "Player2",
+            "Player 2 Play",
+            "Player 2 Money",
+        ];
 
-        //         for (col, &header) in headers.iter().enumerate() {
-        //             worksheet.write(0, col.try_into().unwrap(), header)?;
-        //         }
-        worksheet.write(0, 0, "GameId")?;
-        worksheet.write(0, 1, "Player1")?;
-        worksheet.write(0, 2, "Player 1 Play")?;
-        worksheet.write(0, 3, "Player 1 Money")?;
-        worksheet.write(0, 4, "Player2")?;
-        worksheet.write(0, 5, "Player 2 Play")?;
-        worksheet.write(0, 6, "Player 2 Money")?;
+        for (col, &header) in headers.iter().enumerate() {
+            worksheet.write(0, col.try_into().unwrap(), header)?;
+        }
 
         for (index, round) in game.party_round.round_played.iter().enumerate() {
             let adjusted_index = index + 1;
