@@ -12,6 +12,10 @@ The project demonstrates the classic game theory scenario of the Prisoner's Dile
 * If both players defect, they both receive a small reward.
 * If one player cooperates and the other defects, the defector receives a higher reward, and the cooperator receives nothing.
 
+## Ressources
+
+> https://slint.dev/
+> https://doc.rust-lang.org/book/title-page.html
 
 ### Features
 
@@ -33,6 +37,8 @@ The project demonstrates the classic game theory scenario of the Prisoner's Dile
 
 > make runf // create client to play the game
 
+> runAllTest // run tests from settin
+
 ## Schema
 
 ![alt text](assets/schema.png)
@@ -49,4 +55,4 @@ The project demonstrates the classic game theory scenario of the Prisoner's Dile
 
 - **Rematch System Implementation:** Introduce a rematch system that allows players to initiate new game sessions without exiting the application. This addition can enhance user experience by providing a seamless and efficient way to continue playing consecutive rounds without interruption.
 
-
+- **Refactoring Needed:** The back-end infrastructure requires significant refactoring to enhance its functionality. This project was initiated to experiment and test fundamental principles related to multi-threading and data management.
