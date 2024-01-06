@@ -30,6 +30,7 @@ The project demonstrates the classic game theory scenario of the Prisoner's Dile
 ### How to run
 
 > make runb // create back server
+
 > make runf // create client to play the game
 
 ## Schema
