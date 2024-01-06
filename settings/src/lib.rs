@@ -241,10 +241,6 @@ impl Protocol {
 pub struct Settings {
     pub host: String,
     pub port: String,
-    pub client_max: String,
-    pub buffer_size1: String,
-    pub buffer_size2: String,
-    pub party_name: String,
 }
 
 pub struct Log;
@@ -275,10 +271,6 @@ impl Settings {
         Self {
             host: Self::get_configuration_value(&settings_map, "host"),
             port: Self::get_configuration_value(&settings_map, "port"),
-            client_max: Self::get_configuration_value(&settings_map, "client_max"),
-            buffer_size1: Self::get_configuration_value(&settings_map, "buffer_size1"),
-            buffer_size2: Self::get_configuration_value(&settings_map, "buffer_size2"),
-            party_name: Self::get_configuration_value(&settings_map, "party_name"),
         }
     }
 
